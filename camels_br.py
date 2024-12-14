@@ -7,48 +7,42 @@ from tqdm import tqdm
 import xarray as xr
 
 _CAMELS_BR_TIMESERIES_SUBDIRS = [
-    '03_CAMELS_BR_streamflow_mm_selected_catchments',
-    '04_CAMELS_BR_streamflow_simulated',
-    '05_CAMELS_BR_precipitation_chirps',
-    '06_CAMELS_BR_precipitation_mswep',
-    '07_CAMELS_BR_precipitation_cpc',
-    '08_CAMELS_BR_evapotransp_gleam',
-    '09_CAMELS_BR_evapotransp_mgb',
-    '10_CAMELS_BR_potential_evapotransp_gleam',
-    '11_CAMELS_BR_temperature_min_cpc',
-    '12_CAMELS_BR_temperature_mean_cpc',
-    '13_CAMELS_BR_temperature_max_cpc'
+    '03_CAMELS_BR_streamflow_mm_selected_catchments', '04_CAMELS_BR_streamflow_simulated',
+    '05_CAMELS_BR_precipitation_chirps', '06_CAMELS_BR_precipitation_mswep', '07_CAMELS_BR_precipitation_cpc',
+    '08_CAMELS_BR_evapotransp_gleam', '09_CAMELS_BR_evapotransp_mgb', '10_CAMELS_BR_potential_evapotransp_gleam',
+    '11_CAMELS_BR_temperature_min_cpc', '12_CAMELS_BR_temperature_mean_cpc', '13_CAMELS_BR_temperature_max_cpc'
 ]
 
 _CAMELS_BR_FEATURE_COLS = [
     'evapotransp_gleam',
-    'evapotransp_mgb', 
-    'potential_evapotransp_gleam', 
+    'evapotransp_mgb',
+    'potential_evapotransp_gleam',
     'precipitation_chirps',
-    'precipitation_cpc', 
-    'precipitation_mswep', 
-    'simulated_streamflow', 
-    'streamflow', 
+    'precipitation_cpc',
+    'precipitation_mswep',
+    'simulated_streamflow',
+    'streamflow',
     'temperature_max'
-    'temperature_mean', 
+    'temperature_mean',
     'temperature_min',
 ]
 
 _CAMELS_BR_METADATA = {
     'evapotransp_gleam': 'mm/day',
-    'evapotransp_mgb': 'mm/day', 
-    'potential_evapotransp_gleam': 'mm/day', 
+    'evapotransp_mgb': 'mm/day',
+    'potential_evapotransp_gleam': 'mm/day',
     'precipitation_chirps': 'mm/day',
-    'precipitation_cpc': 'mm/day', 
-    'precipitation_mswep': 'mm/day', 
-    'simulated_streamflow': 'm3/s', 
-    'streamflow': 'mm/day', 
+    'precipitation_cpc': 'mm/day',
+    'precipitation_mswep': 'mm/day',
+    'simulated_streamflow': 'm3/s',
+    'streamflow': 'mm/day',
     'temperature_max': 'C',
-    'temperature_mean': 'C', 
+    'temperature_mean': 'C',
     'temperature_min': 'C',
 }
 
 _FILE_NAME = "camels_br.zarr"
+
 
 def load_camels_br_attributes(data_dir: Path, basins: list[str] = []) -> pd.DataFrame:
     """Load CAMELS-BR attributes.
@@ -92,6 +86,7 @@ def load_camels_br_attributes(data_dir: Path, basins: list[str] = []) -> pd.Data
 
     return df
 
+
 def preprocess_camels_br_dataset(data_dir: Path, output_dir: Path):
     """Preprocess CAMELS-BR data set and create per-basin files for more flexible and faster data loading.
     
@@ -113,7 +108,7 @@ def preprocess_camels_br_dataset(data_dir: Path, output_dir: Path):
         If any of the subdirectories of CAMELS-BR is not found in `data_dir`, specifically the folders starting with 
         `03_*` up to `13_*`.
     """
-    basin_list = []   
+    basin_list = []
 
     # Streamflow and forcing data are stored in different subdirectories that start with a numeric value each. The first
     # one is streamflow mm/d starting with 03 and the last is max temp starting with 13.
@@ -133,7 +128,8 @@ def preprocess_camels_br_dataset(data_dir: Path, output_dir: Path):
             basin_file = list(timeseries_folder.glob(f'{basin}_*'))
             if basin_file:
                 df = pd.read_csv(basin_file[0], sep=' ')
-                df["date"] = pd.to_datetime(df.year.map(str) + "/" + df.month.map(str) + "/" + df.day.map(str),format="%Y/%m/%d")
+                df["date"] = pd.to_datetime(df.year.map(str) + "/" + df.month.map(str) + "/" + df.day.map(str),
+                                            format="%Y/%m/%d")
                 df = df.set_index('date')
                 feat_col = [c for c in df.columns if c not in ['year', 'month', 'day']][0]
                 data[feat_col] = df[feat_col]
@@ -141,14 +137,16 @@ def preprocess_camels_br_dataset(data_dir: Path, output_dir: Path):
         old_names = list(df.columns)
         rename_dict = dict(zip(old_names, _CAMELS_BR_FEATURE_COLS))
         df = df.rename(columns=rename_dict)
-        basin_list.append(df.to_xarray().astype('float32').assign_coords({"gauge_id": basin})[sorted(_CAMELS_BR_FEATURE_COLS)])
-        
+        basin_list.append(df.to_xarray().astype('float32').assign_coords({"gauge_id": basin
+                                                                         })[sorted(_CAMELS_BR_FEATURE_COLS)])
+
     attr_ds = load_camels_br_attributes(data_dir, basins).to_xarray()
     ds = xr.concat(basin_list, dim='gauge_id')
     xr.merge([ds, attr_ds])
 
     ds.attrs.update(_CAMELS_BR_METADATA)
     ds.chunk('auto').to_zarr(output_dir / _FILE_NAME)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Code to turn camels-br into a zarr store')
