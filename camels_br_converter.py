@@ -8,9 +8,11 @@ import xarray as xr
 
 _CAMELS_BR_TIMESERIES_SUBDIRS = [
     '03_CAMELS_BR_streamflow_mm_selected_catchments', '04_CAMELS_BR_streamflow_simulated',
-    '05_CAMELS_BR_precipitation_chirps', '06_CAMELS_BR_precipitation_mswep', '07_CAMELS_BR_precipitation_cpc',
-    '08_CAMELS_BR_evapotransp_gleam', '09_CAMELS_BR_evapotransp_mgb', '10_CAMELS_BR_potential_evapotransp_gleam',
-    '11_CAMELS_BR_temperature_min_cpc', '12_CAMELS_BR_temperature_mean_cpc', '13_CAMELS_BR_temperature_max_cpc'
+    '05_CAMELS_BR_precipitation_chirps', '06_CAMELS_BR_precipitation_mswep',
+    '07_CAMELS_BR_precipitation_cpc', '08_CAMELS_BR_evapotransp_gleam',
+    '09_CAMELS_BR_evapotransp_mgb', '10_CAMELS_BR_potential_evapotransp_gleam',
+    '11_CAMELS_BR_temperature_min_cpc', '12_CAMELS_BR_temperature_mean_cpc',
+    '13_CAMELS_BR_temperature_max_cpc'
 ]
 
 _CAMELS_BR_FEATURE_COLS = [
@@ -116,19 +118,23 @@ def preprocess_camels_br_dataset(data_dir: Path, output_dir: Path):
     if any([not p.is_dir() for p in timeseries_folders]):
         missing_subdirectories = [p.name for p in timeseries_folders if not p.is_dir()]
         raise FileNotFoundError(
-            f"The following directories were expected in {data_dir} but do not exist: {missing_subdirectories}")
+            f"The following directories were expected in {data_dir} but do not exist: {missing_subdirectories}"
+        )
 
     # Since files is sorted, we can pick the first one, streamflow, and extract the basins names from there
     basins = [x.stem.split('_')[0] for x in timeseries_folders[0].glob('*.txt')]
     print(f"Found {len(basins)} basin files under {timeseries_folders[0].name}")
 
-    for basin in tqdm(basins, desc="Combining timeseries data from different subdirectories into one file per basin"):
+    for basin in tqdm(
+            basins,
+            desc="Combining timeseries data from different subdirectories into one file per basin"):
         data = {}
         for timeseries_folder in timeseries_folders:
             basin_file = list(timeseries_folder.glob(f'{basin}_*'))
             if basin_file:
                 df = pd.read_csv(basin_file[0], sep=' ')
-                df["date"] = pd.to_datetime(df.year.map(str) + "/" + df.month.map(str) + "/" + df.day.map(str),
+                df["date"] = pd.to_datetime(df.year.map(str) + "/" + df.month.map(str) + "/" +
+                                            df.day.map(str),
                                             format="%Y/%m/%d")
                 df = df.set_index('date')
                 feat_col = [c for c in df.columns if c not in ['year', 'month', 'day']][0]
@@ -137,8 +143,8 @@ def preprocess_camels_br_dataset(data_dir: Path, output_dir: Path):
         old_names = list(df.columns)
         rename_dict = dict(zip(old_names, _CAMELS_BR_FEATURE_COLS))
         df = df.rename(columns=rename_dict)
-        basin_list.append(df.to_xarray().astype('float32').assign_coords({"gauge_id": basin
-                                                                         })[sorted(_CAMELS_BR_FEATURE_COLS)])
+        basin_list.append(df.to_xarray().astype('float32').assign_coords(
+            {"gauge_id": basin})[sorted(_CAMELS_BR_FEATURE_COLS)])
 
     attr_ds = load_camels_br_attributes(data_dir, basins).to_xarray()
     ds = xr.concat(basin_list, dim='gauge_id')
@@ -150,8 +156,16 @@ def preprocess_camels_br_dataset(data_dir: Path, output_dir: Path):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Code to turn camels-br into a zarr store')
-    parser.add_argument('-d', '--data_path', type=str, required=True, help='Path to the unzipped CAMELS-BR')
-    parser.add_argument('-o', '--output_path', type=str, required=True, help='Path to the output zarr store')
+    parser.add_argument('-d',
+                        '--data_path',
+                        type=str,
+                        required=True,
+                        help='Path to the unzipped CAMELS-BR')
+    parser.add_argument('-o',
+                        '--output_path',
+                        type=str,
+                        required=True,
+                        help='Path to the output zarr store')
     args = parser.parse_args()
     data_dir = Path(args.data_path)
     output_dir = Path(args.output_path)
